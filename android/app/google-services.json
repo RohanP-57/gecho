@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "66748875329",
+    "project_id": "gecho-6c1b7",
+    "storage_bucket": "gecho-6c1b7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:66748875329:android:21f5f83b44a1be6fa0fcc0",
+        "android_client_info": {
+          "package_name": "com.example.gecho"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9DwWb6gY2SwKH0VbtooGIXuHBSpJDu7Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
