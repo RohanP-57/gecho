@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
-import '../../services/user_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/auth_service.dart';
 import '../../services/post_service.dart';
 import '../../models/user_model.dart';
 import '../../models/post_model.dart';
 import '../../widgets/post_grid_item.dart';
+import '../auth/login_screen.dart';
+import '../admin/approval_requests_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onLogout;
+  
+  const ProfileScreen({super.key, this.onLogout});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
-  final UserService _userService = UserService();
+  final AuthService _authService = AuthService();
   final PostService _postService = PostService();
-  User? _currentUser;
+  UserModel? _currentUser;
   late TabController _tabController;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -32,145 +39,366 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Future<void> _loadCurrentUser() async {
-    final user = await _userService.getCurrentUser();
-    setState(() {
-      _currentUser = user;
-    });
+    try {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null) {
+        final userData = await _authService.getUserData(firebaseUser.uid);
+        if (userData != null) {
+          setState(() {
+            _currentUser = userData;
+            _isLoading = false;
+          });
+        } else {
+          // Create a basic user model from Firebase user for demo
+          setState(() {
+            _currentUser = UserModel(
+              uid: firebaseUser.uid,
+              email: firebaseUser.email ?? '',
+              name: firebaseUser.displayName ?? 'User',
+              displayName: firebaseUser.displayName ?? 'User',
+              userType: 'student', // Default
+              createdAt: DateTime.now(),
+              isActive: true,
+            );
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading user: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await _authService.signOut();
+      if (mounted) {
+        // Use the callback if provided, otherwise fallback to navigation
+        if (widget.onLogout != null) {
+          widget.onLogout!();
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      print('Error signing out: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_currentUser == null) {
+    if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_currentUser!.username),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () {
-              // Settings menu
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Profile header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    // Profile picture
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.grey[300],
-                      backgroundImage: _currentUser!.profileImageUrl != null
-                          ? NetworkImage(_currentUser!.profileImageUrl!)
-                          : null,
-                      child: _currentUser!.profileImageUrl == null
-                          ? Text(
-                              _currentUser!.displayName[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                            )
-                          : null,
-                    ),
-                    
-                    const SizedBox(width: 20),
-                    
-                    // Stats
-                    Expanded(
-                      child: Center(
-                        child: _buildStatColumn('Posts', _currentUser!.postsCount),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Name and bio
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _currentUser!.displayName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (_currentUser!.bio != null) ...[
-                        const SizedBox(height: 4),
-                        Text(_currentUser!.bio!),
-                      ],
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Edit profile button
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      // Edit profile
-                    },
-                    child: const Text('Edit Profile'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          const Divider(),
-          
-          // Tab bar
-          TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(
-                icon: Icon(Icons.photo_library),
-                text: 'Photos',
-              ),
-              Tab(
-                icon: Icon(Icons.article),
-                text: 'Blogs',
+    if (_currentUser == null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.person_off, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('Not logged in', style: TextStyle(fontSize: 18, color: Colors.grey)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  );
+                },
+                child: const Text('Login'),
               ),
             ],
           ),
-          
-          // Tab views
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Photos tab
-                _buildPostsGrid(PostType.photo),
-                // Blogs tab
-                _buildPostsGrid(PostType.blog),
-              ],
-            ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_currentUser!.displayName ?? 'Profile'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') {
+                _signOut();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 8),
+                    Text('Logout'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Profile header
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      // Profile picture
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.blue.shade100,
+                        backgroundImage: _currentUser!.photoURL != null
+                            ? NetworkImage(_currentUser!.photoURL!)
+                            : null,
+                        child: _currentUser!.photoURL == null
+                            ? Text(
+                                (_currentUser!.displayName?.isNotEmpty ?? false)
+                                    ? _currentUser!.displayName![0].toUpperCase()
+                                    : 'U',
+                                style: TextStyle(
+                                  fontSize: 24, 
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade600,
+                                ),
+                              )
+                            : null,
+                      ),
+                      
+                      const SizedBox(width: 20),
+                      
+                      // Stats
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildStatColumn('Posts', 0),
+                            _buildStatColumn('Type', _currentUser!.userType.toUpperCase()),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Name and info
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _currentUser!.displayName ?? 'User',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _currentUser!.email,
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_currentUser!.department != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _currentUser!.department!,
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                        if (_currentUser!.studentId != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Student ID: ${_currentUser!.studentId}',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                        if (_currentUser!.clubName != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _currentUser!.clubName!,
+                            style: TextStyle(
+                              color: Colors.blue.shade600,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Action buttons
+                  Column(
+                    children: [
+                      // Admin-specific buttons
+                      if (_currentUser!.userType == 'admin') ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('registration_requests')
+                                .where('status', isEqualTo: 'pending')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              final requestCount = snapshot.data?.docs.length ?? 0;
+                              
+                              return ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const ApprovalRequestsScreen(),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade600,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.pending_actions),
+                                    const SizedBox(width: 8),
+                                    const Text('Approval Requests'),
+                                    if (requestCount > 0) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade600,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          requestCount.toString(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      
+                      Row(
+                        children: [
+                          // Only show Edit Profile for non-students
+                          if (_currentUser!.userType != 'student') ...[
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Edit profile coming soon!')),
+                                  );
+                                },
+                                child: const Text('Edit Profile'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _signOut,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red.shade600,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Logout'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            const Divider(),
+            
+            // Content area
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.photo_library_outlined,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No posts yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _currentUser!.userType == 'student' 
+                        ? 'Check the Feed tab to see posts from clubs and announcements'
+                        : 'Create your first post to share with students',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatColumn(String label, int count) {
+  Widget _buildStatColumn(String label, dynamic value) {
     return Column(
       children: [
         Text(
-          count.toString(),
+          value.toString(),
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -184,138 +412,5 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildPostsGrid(PostType postType) {
-    return StreamBuilder<List<Post>>(
-      stream: _postService.getUserPosts(_currentUser!.id),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
 
-        final allPosts = snapshot.data ?? [];
-        final filteredPosts = allPosts.where((post) => post.type == postType).toList();
-
-        if (filteredPosts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  postType == PostType.photo ? Icons.photo_library : Icons.article,
-                  size: 64,
-                  color: Colors.grey,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  postType == PostType.photo ? 'No photos yet' : 'No blogs yet',
-                  style: const TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-                Text(
-                  postType == PostType.photo 
-                      ? 'Share your first photo!' 
-                      : 'Write your first blog post!',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (postType == PostType.photo) {
-          // Grid view for photos
-          return GridView.builder(
-            padding: const EdgeInsets.all(2),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 2,
-              mainAxisSpacing: 2,
-            ),
-            itemCount: filteredPosts.length,
-            itemBuilder: (context, index) {
-              return PostGridItem(post: filteredPosts[index]);
-            },
-          );
-        } else {
-          // List view for blogs
-          return ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: filteredPosts.length,
-            itemBuilder: (context, index) {
-              final post = filteredPosts[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  leading: post.imageUrl != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            post.imageUrl!,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                width: 60,
-                                height: 60,
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.article),
-                              );
-                            },
-                          ),
-                        )
-                      : Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Colors.blue[100],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.article, color: Colors.blue),
-                        ),
-                  title: Text(
-                    post.caption,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (post.blogContent != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          post.blogContent!.length > 100
-                              ? '${post.blogContent!.substring(0, 100)}...'
-                              : post.blogContent!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.favorite, size: 16, color: Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Text('${post.likes.length}', style: const TextStyle(color: Colors.grey)),
-                          const SizedBox(width: 16),
-                          Icon(Icons.comment, size: 16, color: Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Text('${post.commentCount}', style: const TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    // Navigate to post detail
-                    Navigator.pushNamed(context, '/post_detail', arguments: post);
-                  },
-                ),
-              );
-            },
-          );
-        }
-      },
-    );
-  }
 }

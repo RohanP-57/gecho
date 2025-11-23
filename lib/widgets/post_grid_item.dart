@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/post_model.dart';
-import 'post_detail_screen.dart';
 
 class PostGridItem extends StatelessWidget {
   final Post post;
@@ -12,11 +11,9 @@ class PostGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PostDetailScreen(post: post),
-          ),
+        // Navigate to post detail (placeholder)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Post detail view coming soon!')),
         );
       },
       child: Container(
@@ -60,7 +57,7 @@ class PostGridItem extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Icon(

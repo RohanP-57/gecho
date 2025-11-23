@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/post_service.dart';
-import '../../services/user_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
+import '../../models/post_model.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -14,7 +16,7 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final PostService _postService = PostService();
-  final UserService _userService = UserService();
+  final AuthService _authService = AuthService();
   final ImagePicker _picker = ImagePicker();
   
   File? _selectedImage;
@@ -24,7 +26,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   
   bool _isPhoto = true;
   bool _isLoading = false;
-  User? _currentUser;
+  bool _isPriority = false; // For admin priority posts
+  UserModel? _currentUser;
 
   @override
   void initState() {
@@ -33,10 +36,32 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _loadCurrentUser() async {
-    final user = await _userService.getCurrentUser();
-    setState(() {
-      _currentUser = user;
-    });
+    try {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null) {
+        final userData = await _authService.getUserData(firebaseUser.uid);
+        if (userData != null) {
+          setState(() {
+            _currentUser = userData;
+          });
+        } else {
+          // Create a basic user model from Firebase user for demo
+          setState(() {
+            _currentUser = UserModel(
+              uid: firebaseUser.uid,
+              email: firebaseUser.email ?? '',
+              name: firebaseUser.displayName ?? 'User',
+              displayName: firebaseUser.displayName ?? 'User',
+              userType: 'club', // Default for create screen access
+              createdAt: DateTime.now(),
+              isActive: true,
+            );
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading user: $e');
+    }
   }
 
   Future<void> _pickImage() async {
@@ -94,38 +119,36 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           .where((tag) => tag.isNotEmpty)
           .toList();
 
-      String? error;
-
-      if (_isPhoto) {
-        error = await _postService.createPhotoPost(
-          imageFile: _selectedImage!,
-          caption: _captionController.text.trim(),
-          author: _currentUser!,
-          tags: tags,
-        );
-      } else {
-        error = await _postService.createBlogPost(
-          title: _captionController.text.trim(),
-          content: _blogContentController.text.trim(),
-          author: _currentUser!,
-          tags: tags,
-        );
-      }
+      String? error = await _postService.createPost(
+        caption: _captionController.text.trim(),
+        author: _currentUser!,
+        type: _isPhoto ? PostType.photo : PostType.blog,
+        imageFile: _isPhoto ? _selectedImage : null,
+        blogContent: !_isPhoto ? _blogContentController.text.trim() : null,
+        tags: tags,
+        isPriority: _isPriority,
+      );
 
       if (error == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Post created successfully!')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Post created successfully!')),
+          );
+        }
         _resetForm();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error)),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error)),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -308,6 +331,58 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 hintText: 'photography, travel, nature (comma separated)',
               ),
             ),
+            
+            const SizedBox(height: 16),
+            
+            // Priority option (only for admins)
+            if (_currentUser?.userType == 'admin') ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _isPriority,
+                      onChanged: (value) {
+                        setState(() {
+                          _isPriority = value ?? false;
+                        });
+                      },
+                      activeColor: Colors.orange[600],
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Priority Post',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange[800],
+                            ),
+                          ),
+                          Text(
+                            'Pin this post to the top of the feed for 2 days',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.push_pin,
+                      color: Colors.orange[600],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

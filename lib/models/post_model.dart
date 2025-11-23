@@ -6,6 +6,7 @@ class Post {
   final String authorUsername;
   final String authorDisplayName;
   final String? authorProfileImage;
+  final String authorType; // 'student', 'club', 'admin'
   final PostType type;
   final String? imageUrl;
   final String caption;
@@ -14,6 +15,8 @@ class Post {
   final int commentCount;
   final List<String> tags;
   final DateTime createdAt;
+  final bool isPriority; // For admin priority posts
+  final DateTime? priorityExpiresAt; // When priority expires
 
   Post({
     required this.id,
@@ -21,6 +24,7 @@ class Post {
     required this.authorUsername,
     required this.authorDisplayName,
     this.authorProfileImage,
+    required this.authorType,
     required this.type,
     this.imageUrl,
     required this.caption,
@@ -29,6 +33,8 @@ class Post {
     this.commentCount = 0,
     this.tags = const [],
     required this.createdAt,
+    this.isPriority = false,
+    this.priorityExpiresAt,
   });
 
   factory Post.fromMap(Map<String, dynamic> map, String id) {
@@ -38,6 +44,7 @@ class Post {
       authorUsername: map['authorUsername'] ?? '',
       authorDisplayName: map['authorDisplayName'] ?? '',
       authorProfileImage: map['authorProfileImage'],
+      authorType: map['authorType'] ?? 'student',
       type: PostType.values.firstWhere(
         (e) => e.toString() == 'PostType.${map['type']}',
         orElse: () => PostType.photo,
@@ -49,6 +56,10 @@ class Post {
       commentCount: map['commentCount'] ?? 0,
       tags: List<String>.from(map['tags'] ?? []),
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] ?? 0),
+      isPriority: map['isPriority'] ?? false,
+      priorityExpiresAt: map['priorityExpiresAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(map['priorityExpiresAt'])
+          : null,
     );
   }
 
@@ -58,6 +69,7 @@ class Post {
       'authorUsername': authorUsername,
       'authorDisplayName': authorDisplayName,
       'authorProfileImage': authorProfileImage,
+      'authorType': authorType,
       'type': type.toString().split('.').last,
       'imageUrl': imageUrl,
       'caption': caption,
@@ -66,6 +78,8 @@ class Post {
       'commentCount': commentCount,
       'tags': tags,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'isPriority': isPriority,
+      'priorityExpiresAt': priorityExpiresAt?.millisecondsSinceEpoch,
     };
   }
 

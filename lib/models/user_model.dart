@@ -4,8 +4,10 @@ class UserModel {
   final String uid;
   final String email;
   final String name;
+  final String? displayName; // From Google Auth
   final String userType; // 'student' or 'club'
   final String? profileImageUrl;
+  final String? photoURL; // From Google Auth
   final String? bio;
   final DateTime createdAt;
   final DateTime? lastActive;
@@ -32,8 +34,10 @@ class UserModel {
     required this.uid,
     required this.email,
     required this.name,
+    this.displayName,
     required this.userType,
     this.profileImageUrl,
+    this.photoURL,
     this.bio,
     required this.createdAt,
     this.lastActive,
@@ -59,8 +63,10 @@ class UserModel {
       uid: doc.id,
       email: data['email'] ?? '',
       name: data['name'] ?? '',
+      displayName: data['displayName'],
       userType: data['userType'] ?? 'student',
       profileImageUrl: data['profileImageUrl'],
+      photoURL: data['photoURL'],
       bio: data['bio'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lastActive: (data['lastActive'] as Timestamp?)?.toDate(),
@@ -96,7 +102,9 @@ class UserModel {
     };
 
     // Add optional fields if they exist
+    if (displayName != null) data['displayName'] = displayName;
     if (profileImageUrl != null) data['profileImageUrl'] = profileImageUrl;
+    if (photoURL != null) data['photoURL'] = photoURL;
     if (bio != null) data['bio'] = bio;
     if (lastActive != null) data['lastActive'] = Timestamp.fromDate(lastActive!);
     
@@ -119,8 +127,10 @@ class UserModel {
     String? uid,
     String? email,
     String? name,
+    String? displayName,
     String? userType,
     String? profileImageUrl,
+    String? photoURL,
     String? bio,
     DateTime? createdAt,
     DateTime? lastActive,
@@ -141,8 +151,10 @@ class UserModel {
       uid: uid ?? this.uid,
       email: email ?? this.email,
       name: name ?? this.name,
+      displayName: displayName ?? this.displayName,
       userType: userType ?? this.userType,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      photoURL: photoURL ?? this.photoURL,
       bio: bio ?? this.bio,
       createdAt: createdAt ?? this.createdAt,
       lastActive: lastActive ?? this.lastActive,
@@ -165,7 +177,10 @@ class UserModel {
   bool get isStudent => userType == 'student';
   bool get isClub => userType == 'club';
   
-  String get displayName {
+  String get effectiveDisplayName {
+    if (displayName != null && displayName!.isNotEmpty) {
+      return displayName!;
+    }
     if (isClub && clubName != null) {
       return clubName!;
     }

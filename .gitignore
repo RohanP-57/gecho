@@ -43,3 +43,28 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Security - Environment variables and sensitive files
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
+# Firebase and API keys
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+
+# Cloudinary and other API configurations
+cloudinary_config.dart
+
+# Any other sensitive configuration files
+config/
+secrets/
+*.key
+*.pem
+*.p12
+*.keystore
+key.properties

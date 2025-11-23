@@ -8,38 +8,110 @@ import 'image_service.dart';
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ImageService _imageService = ImageService();
+
+  // Get collection name based on user type
+  String _getCollectionName(String userType) {
+    switch (userType.toLowerCase()) {
+      case 'admin':
+        return 'admin_users';
+      case 'student':
+        return 'student_users';
+      case 'club':
+        return 'club_users';
+      default:
+        return 'student_users'; // Default fallback
+    }
+  }
   final Uuid _uuid = const Uuid();
 
-  // Get all posts from all users (for feed)
+  // Get all posts from global posts collection (everyone can see all posts)
   Stream<List<Post>> getPosts() {
-    // Get posts from all known users
-    return _getAllPostsFromKnownUsers();
+    return _firestore
+        .collection('posts')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      List<Post> posts = snapshot.docs.map((doc) {
+        try {
+          final data = doc.data();
+          // Convert Firestore timestamp to milliseconds for Post.fromMap
+          if (data['createdAt'] is Timestamp) {
+            data['createdAt'] = (data['createdAt'] as Timestamp).millisecondsSinceEpoch;
+          }
+          if (data['priorityExpiresAt'] is Timestamp) {
+            data['priorityExpiresAt'] = (data['priorityExpiresAt'] as Timestamp).millisecondsSinceEpoch;
+          }
+          return Post.fromMap(data, doc.id);
+        } catch (e) {
+          print('Error parsing post ${doc.id}: $e');
+          return null;
+        }
+      }).where((post) => post != null).cast<Post>().toList();
+
+      // Sort posts: Priority posts (not expired) first, then by creation date
+      posts.sort((a, b) {
+        final now = DateTime.now();
+        
+        // Check if posts are priority and not expired
+        final aIsPriorityActive = a.isPriority && 
+            (a.priorityExpiresAt == null || a.priorityExpiresAt!.isAfter(now));
+        final bIsPriorityActive = b.isPriority && 
+            (b.priorityExpiresAt == null || b.priorityExpiresAt!.isAfter(now));
+        
+        // Priority posts come first
+        if (aIsPriorityActive && !bIsPriorityActive) return -1;
+        if (!aIsPriorityActive && bIsPriorityActive) return 1;
+        
+        // If both are priority or both are not priority, sort by creation date
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+      return posts;
+    });
   }
 
-  // Get posts from all known users
+  // Delete post from global posts collection
+  Future<void> deletePost(String postId) async {
+    try {
+      await _firestore.collection('posts').doc(postId).delete();
+      print('Post $postId deleted successfully');
+    } catch (e) {
+      print('Error deleting post: $e');
+      rethrow;
+    }
+  }
+
+  // Get posts from all known users (legacy method - updated for role-based collections)
   Stream<List<Post>> _getAllPostsFromKnownUsers() async* {
-    final knownUsers = ['current_user', 'user_2', 'user_3']; // Add more user IDs as needed
-    
     // Create a list to hold all posts
     List<Post> allPosts = [];
     
-    // Get posts from each user
-    for (String userId in knownUsers) {
+    // Get posts from all user types and collections
+    for (String userType in ['admin', 'student', 'club']) {
       try {
-        final userPosts = await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('posts')
-            .orderBy('createdAt', descending: true)
-            .get();
+        final collection = _getCollectionName(userType);
+        final usersSnapshot = await _firestore.collection(collection).get();
         
-        final posts = userPosts.docs
-            .map((doc) => Post.fromMap(doc.data(), doc.id))
-            .toList();
-        
-        allPosts.addAll(posts);
+        for (final userDoc in usersSnapshot.docs) {
+          try {
+            final userPosts = await _firestore
+                .collection(collection)
+                .doc(userDoc.id)
+                .collection('posts')
+                .orderBy('createdAt', descending: true)
+                .get();
+            
+            final posts = userPosts.docs
+                .map((doc) => Post.fromMap(doc.data(), doc.id))
+                .toList();
+            
+            allPosts.addAll(posts);
+          } catch (e) {
+            print('Error getting posts for user ${userDoc.id}: $e');
+          }
+        }
       } catch (e) {
-        print('Error getting posts for user $userId: $e');
+        print('Error getting posts from $userType collection: $e');
       }
     }
     
@@ -48,26 +120,36 @@ class PostService {
     
     yield allPosts;
     
-    // Set up real-time updates by listening to each user's posts
-    await for (final _ in Stream.periodic(const Duration(seconds: 5))) {
+    // Set up real-time updates
+    await for (final _ in Stream.periodic(const Duration(seconds: 10))) {
       allPosts.clear();
       
-      for (String userId in knownUsers) {
+      // Refresh posts from all collections
+      for (String userType in ['admin', 'student', 'club']) {
         try {
-          final userPosts = await _firestore
-              .collection('users')
-              .doc(userId)
-              .collection('posts')
-              .orderBy('createdAt', descending: true)
-              .get();
+          final collection = _getCollectionName(userType);
+          final usersSnapshot = await _firestore.collection(collection).get();
           
-          final posts = userPosts.docs
-              .map((doc) => Post.fromMap(doc.data(), doc.id))
-              .toList();
-          
-          allPosts.addAll(posts);
+          for (final userDoc in usersSnapshot.docs) {
+            try {
+              final userPosts = await _firestore
+                  .collection(collection)
+                  .doc(userDoc.id)
+                  .collection('posts')
+                  .orderBy('createdAt', descending: true)
+                  .get();
+              
+              final posts = userPosts.docs
+                  .map((doc) => Post.fromMap(doc.data(), doc.id))
+                  .toList();
+              
+              allPosts.addAll(posts);
+            } catch (e) {
+              print('Error getting posts for user ${userDoc.id}: $e');
+            }
+          }
         } catch (e) {
-          print('Error getting posts for user $userId: $e');
+          print('Error getting posts from $userType collection: $e');
         }
       }
       
@@ -87,10 +169,11 @@ class PostService {
             .toList());
   }
 
-  // Get posts by specific user
-  Stream<List<Post>> getUserPosts(String userId) {
+  // Get posts by specific user with user type
+  Stream<List<Post>> getUserPostsByType(String userId, String userType) {
+    final collection = _getCollectionName(userType);
     return _firestore
-        .collection('users')
+        .collection(collection)
         .doc(userId)
         .collection('posts')
         .orderBy('createdAt', descending: true)
@@ -100,11 +183,61 @@ class PostService {
             .toList());
   }
 
-  // Get single post
+  // Get posts by specific user (legacy - tries all collections)
+  Stream<List<Post>> getUserPosts(String userId) {
+    // Try to find user in each collection and return their posts
+    return Stream.fromFuture(_getUserPostsFromAnyCollection(userId));
+  }
+
+  Future<List<Post>> _getUserPostsFromAnyCollection(String userId) async {
+    for (String userType in ['admin', 'student', 'club']) {
+      try {
+        final collection = _getCollectionName(userType);
+        final userPosts = await _firestore
+            .collection(collection)
+            .doc(userId)
+            .collection('posts')
+            .orderBy('createdAt', descending: true)
+            .get();
+
+        if (userPosts.docs.isNotEmpty) {
+          return userPosts.docs.map((doc) => Post.fromMap(doc.data(), doc.id)).toList();
+        }
+      } catch (e) {
+        print('Error getting posts from $userType collection: $e');
+      }
+    }
+    return [];
+  }
+
+  // Get single post by trying all collections
   Future<Post?> getPost(String userId, String postId) async {
+    for (String userType in ['admin', 'student', 'club']) {
+      try {
+        final collection = _getCollectionName(userType);
+        final doc = await _firestore
+            .collection(collection)
+            .doc(userId)
+            .collection('posts')
+            .doc(postId)
+            .get();
+        
+        if (doc.exists) {
+          return Post.fromMap(doc.data()!, doc.id);
+        }
+      } catch (e) {
+        print('Error getting post from $userType collection: $e');
+      }
+    }
+    return null;
+  }
+
+  // Get single post with user type
+  Future<Post?> getPostByType(String userId, String postId, String userType) async {
     try {
+      final collection = _getCollectionName(userType);
       final doc = await _firestore
-          .collection('users')
+          .collection(collection)
           .doc(userId)
           .collection('posts')
           .doc(postId)
@@ -120,7 +253,132 @@ class PostService {
     }
   }
 
-  // Create photo post
+  // Create post in global posts collection (new method for all users)
+  Future<String?> createPost({
+    required String caption,
+    required UserModel author,
+    PostType type = PostType.photo,
+    File? imageFile,
+    String? blogContent,
+    List<String> tags = const [],
+    bool isPriority = false,
+  }) async {
+    try {
+      final postId = _uuid.v4();
+      String? imageUrl;
+      
+      // Upload image if it's a photo post
+      if (type == PostType.photo && imageFile != null) {
+        imageUrl = await _imageService.uploadImage(
+          imageFile: imageFile,
+          userId: author.uid,
+          postId: postId,
+          folder: 'posts',
+        );
+        
+        if (imageUrl == null) {
+          return 'Failed to upload image. Please check your internet connection and try again.';
+        }
+      }
+
+      // Set priority expiry date if this is a priority post (2 days from now)
+      DateTime? priorityExpiresAt;
+      if (isPriority && author.userType == 'admin') {
+        priorityExpiresAt = DateTime.now().add(const Duration(days: 2));
+      }
+
+      // Create post
+      final post = Post(
+        id: postId,
+        authorId: author.uid,
+        authorUsername: author.name,
+        authorDisplayName: author.effectiveDisplayName,
+        authorProfileImage: author.profileImageUrl,
+        authorType: author.userType,
+        type: type,
+        imageUrl: imageUrl,
+        caption: caption,
+        blogContent: blogContent,
+        tags: tags,
+        createdAt: DateTime.now(),
+        isPriority: isPriority && author.userType == 'admin',
+        priorityExpiresAt: priorityExpiresAt,
+      );
+
+      // Save to global posts collection
+      await _firestore
+          .collection('posts')
+          .doc(postId)
+          .set(post.toMap());
+
+      return null; // Success
+    } catch (e) {
+      print('Error creating post: $e');
+      return 'Failed to create post: ${e.toString()}';
+    }
+  }
+
+  // Create photo post with user type
+  Future<String?> createPhotoPostByType({
+    required File imageFile,
+    required String caption,
+    required UserModel author,
+    List<String> tags = const [],
+  }) async {
+    try {
+      final postId = _uuid.v4();
+      String? imageUrl;
+      
+      // Upload image to Cloudinary
+      imageUrl = await _imageService.uploadImage(
+        imageFile: imageFile,
+        userId: author.uid,
+        postId: postId,
+        folder: 'posts',
+      );
+      
+      if (imageUrl != null) {
+        print('Image uploaded successfully to Cloudinary: $imageUrl');
+      } else {
+        print('Cloudinary upload failed');
+        return 'Failed to upload image. Please check your internet connection and try again.';
+      }
+
+      // Create post in user's posts collection
+      final post = Post(
+        id: postId,
+        authorId: author.uid,
+        authorUsername: author.name, // Using name as username
+        authorDisplayName: author.effectiveDisplayName,
+        authorProfileImage: author.profileImageUrl,
+        authorType: author.userType,
+        type: PostType.photo,
+        imageUrl: imageUrl,
+        caption: caption,
+        tags: tags,
+        createdAt: DateTime.now(),
+      );
+
+      // Save to appropriate user collection
+      final collection = _getCollectionName(author.userType);
+      await _firestore
+          .collection(collection)
+          .doc(author.uid)
+          .collection('posts')
+          .doc(postId)
+          .set(post.toMap());
+
+      // Update user's post count
+      await _updateUserPostCountByType(author.uid, author.userType);
+
+      return null; // Success
+    } catch (e) {
+      print('Error creating photo post: $e');
+      return 'Failed to create photo post: ${e.toString()}';
+    }
+  }
+
+  // Create photo post (legacy support)
   Future<String?> createPhotoPost({
     required File imageFile,
     required String caption,
@@ -153,6 +411,7 @@ class PostService {
         authorUsername: author.username,
         authorDisplayName: author.displayName,
         authorProfileImage: author.profileImageUrl,
+        authorType: 'student', // Default for legacy User model
         type: PostType.photo,
         imageUrl: imageUrl,
         caption: caption,
@@ -160,16 +419,16 @@ class PostService {
         createdAt: DateTime.now(),
       );
 
-      // Save to user's posts collection
+      // Try to save to appropriate collection (fallback to student_users)
       await _firestore
-          .collection('users')
+          .collection('student_users')
           .doc(author.id)
           .collection('posts')
           .doc(postId)
           .set(post.toMap());
 
       // Update user's post count
-      await _updateUserPostCount(author.id);
+      await _updateUserPostCountByType(author.id, 'student');
 
       return null; // Success
     } catch (e) {
@@ -178,7 +437,55 @@ class PostService {
     }
   }
 
-  // Create blog post (text-only, no images)
+  // Create blog post with user type
+  Future<String?> createBlogPostByType({
+    required String title,
+    required String content,
+    required UserModel author,
+    File? coverImage, // This parameter is kept for compatibility but ignored
+    List<String> tags = const [],
+  }) async {
+    try {
+      final postId = _uuid.v4();
+      
+      // Blog posts are text-only - no images allowed
+      print('Creating text-only blog post');
+
+      // Create blog post
+      final post = Post(
+        id: postId,
+        authorId: author.uid,
+        authorUsername: author.name,
+        authorDisplayName: author.effectiveDisplayName,
+        authorProfileImage: author.profileImageUrl,
+        authorType: author.userType,
+        type: PostType.blog,
+        imageUrl: null, // Blog posts have no images
+        caption: title,
+        blogContent: content,
+        tags: tags,
+        createdAt: DateTime.now(),
+      );
+
+      // Save to appropriate user collection
+      final collection = _getCollectionName(author.userType);
+      await _firestore
+          .collection(collection)
+          .doc(author.uid)
+          .collection('posts')
+          .doc(postId)
+          .set(post.toMap());
+
+      // Update user's post count
+      await _updateUserPostCountByType(author.uid, author.userType);
+
+      return null; // Success
+    } catch (e) {
+      return 'Failed to create blog post: ${e.toString()}';
+    }
+  }
+
+  // Create blog post (legacy support)
   Future<String?> createBlogPost({
     required String title,
     required String content,
@@ -199,6 +506,7 @@ class PostService {
         authorUsername: author.username,
         authorDisplayName: author.displayName,
         authorProfileImage: author.profileImageUrl,
+        authorType: 'student', // Default for legacy User model
         type: PostType.blog,
         imageUrl: null, // Blog posts have no images
         caption: title,
@@ -207,16 +515,16 @@ class PostService {
         createdAt: DateTime.now(),
       );
 
-      // Save to user's posts collection
+      // Save to student_users collection (fallback)
       await _firestore
-          .collection('users')
+          .collection('student_users')
           .doc(author.id)
           .collection('posts')
           .doc(postId)
           .set(post.toMap());
 
       // Update user's post count
-      await _updateUserPostCount(author.id);
+      await _updateUserPostCountByType(author.id, 'student');
 
       return null; // Success
     } catch (e) {
@@ -224,12 +532,14 @@ class PostService {
     }
   }
 
-  // Delete post (only by post owner)
-  Future<String?> deletePost(String userId, String postId, String? imageUrl) async {
+  // Delete post by type (only by post owner)
+  Future<String?> deletePostByType(String userId, String postId, String userType, String? imageUrl) async {
     try {
+      final collection = _getCollectionName(userType);
+      
       // Delete from user's posts collection
       await _firestore
-          .collection('users')
+          .collection(collection)
           .doc(userId)
           .collection('posts')
           .doc(postId)
@@ -249,7 +559,7 @@ class PostService {
 
       // Delete all comments for this post
       final commentsSnapshot = await _firestore
-          .collection('users')
+          .collection(collection)
           .doc(userId)
           .collection('posts')
           .doc(postId)
@@ -261,7 +571,7 @@ class PostService {
       }
 
       // Update user's post count
-      await _updateUserPostCount(userId);
+      await _updateUserPostCountByType(userId, userType);
       
       return null; // Success
     } catch (e) {
@@ -269,10 +579,13 @@ class PostService {
     }
   }
 
-  // Toggle like on post
-  Future<void> toggleLike(String userId, String postId, String currentUserId) async {
+
+
+  // Toggle like on post by type
+  Future<void> toggleLikeByType(String userId, String postId, String userType, String currentUserId) async {
+    final collection = _getCollectionName(userType);
     final postRef = _firestore
-        .collection('users')
+        .collection(collection)
         .doc(userId)
         .collection('posts')
         .doc(postId);
@@ -294,17 +607,71 @@ class PostService {
     });
   }
 
-  // Update user's post count
+  // Toggle like on post (legacy - tries all collections)
+  Future<void> toggleLike(String userId, String postId, String currentUserId) async {
+    // Try to find post in any collection and toggle like
+    for (String userType in ['admin', 'student', 'club']) {
+      try {
+        final collection = _getCollectionName(userType);
+        final postDoc = await _firestore
+            .collection(collection)
+            .doc(userId)
+            .collection('posts')
+            .doc(postId)
+            .get();
+        
+        if (postDoc.exists) {
+          await toggleLikeByType(userId, postId, userType, currentUserId);
+          return; // Found and updated, exit
+        }
+      } catch (e) {
+        print('Error toggling like in $userType collection: $e');
+      }
+    }
+  }
+
+  // Update user's post count by type
+  Future<void> _updateUserPostCountByType(String userId, String userType) async {
+    try {
+      final collection = _getCollectionName(userType);
+      final postsSnapshot = await _firestore
+          .collection(collection)
+          .doc(userId)
+          .collection('posts')
+          .get();
+      
+      await _firestore.collection(collection).doc(userId).update({
+        'postsCount': postsSnapshot.docs.length,
+      });
+    } catch (e) {
+      print('Error updating post count: $e');
+    }
+  }
+
+  // Update user's post count (legacy - tries all collections)
   Future<void> _updateUserPostCount(String userId) async {
-    final postsSnapshot = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('posts')
-        .get();
-    
-    await _firestore.collection('users').doc(userId).update({
-      'postsCount': postsSnapshot.docs.length,
-    });
+    // Try to find user in each collection and update their post count
+    for (String userType in ['admin', 'student', 'club']) {
+      try {
+        final collection = _getCollectionName(userType);
+        final userDoc = await _firestore.collection(collection).doc(userId).get();
+        
+        if (userDoc.exists) {
+          final postsSnapshot = await _firestore
+              .collection(collection)
+              .doc(userId)
+              .collection('posts')
+              .get();
+          
+          await _firestore.collection(collection).doc(userId).update({
+            'postsCount': postsSnapshot.docs.length,
+          });
+          return; // Found and updated, exit
+        }
+      } catch (e) {
+        print('Error updating post count for $userType: $e');
+      }
+    }
   }
 
   // Update existing posts with image URLs

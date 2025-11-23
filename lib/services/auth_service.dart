@@ -1,48 +1,118 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/user_model.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final firebase_auth.FirebaseAuth _auth = firebase_auth.FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Get current user
-  User? get currentUser => _auth.currentUser;
+  firebase_auth.User? get currentUser => _auth.currentUser;
 
   // Stream of auth changes
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<firebase_auth.User?> get authStateChanges => _auth.authStateChanges();
 
-  // Sign in with university credentials (email/password)
-  Future<UserModel?> signInWithEmailPassword(String email, String password) async {
+  // Main login method - checks credentials against Firebase database
+  Future<UserModel?> signInWithEmailPasswordAndType(String email, String password, String accountType) async {
     try {
-      // Check if user is pre-approved in university database
-      final userDoc = await _firestore.collection('approved_users').doc(email).get();
+      print('Starting login for $email as $accountType');
       
-      if (!userDoc.exists) {
-        throw Exception('Access denied. Contact university administration.');
+      // Step 1: Determine which collection to check
+      String collection;
+      switch (accountType.toLowerCase()) {
+        case 'admin':
+          collection = 'admin_users';
+          break;
+        case 'student':
+          collection = 'student_users';
+          break;
+        case 'club':
+          collection = 'club_users';
+          break;
+        default:
+          throw Exception('Invalid account type');
       }
-
-      // Sign in with Firebase Auth
-      UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+      
+      print('Checking collection: $collection');
+      
+      // Step 2: Find user in Firebase database
+      final query = await _firestore
+          .collection(collection)
+          .where('email', isEqualTo: email.toLowerCase())
+          .get();
+      
+      if (query.docs.isEmpty) {
+        throw Exception('No $accountType account found with this email');
+      }
+      
+      final userDoc = query.docs.first;
+      final userData = userDoc.data();
+      
+      print('User found: ${userData['name']}');
+      
+      // Step 3: Check password
+      if (userData['password'] != password) {
+        throw Exception('Incorrect password');
+      }
+      
+      print('Password correct');
+      
+      // Step 4: Create Firebase Auth user for app navigation
+      firebase_auth.UserCredential authResult;
+      
+      final tempPassword = dotenv.env['FIREBASE_TEMP_PASSWORD'] ?? 'TempPass123!';
+      
+      try {
+        authResult = await _auth.createUserWithEmailAndPassword(
+          email: email,
+          password: tempPassword,
+        );
+        print('Firebase Auth user created');
+      } catch (e) {
+        if (e.toString().contains('email-already-in-use')) {
+          authResult = await _auth.signInWithEmailAndPassword(
+            email: email,
+            password: tempPassword,
+          );
+          print('Firebase Auth user signed in');
+        } else {
+          throw Exception('Authentication failed');
+        }
+      }
+      
+      // Step 5: Create user model
+      final user = UserModel(
+        uid: authResult.user!.uid,
+        email: userData['email'] ?? email,
+        name: userData['name'] ?? '',
+        displayName: userData['displayName'] ?? userData['name'] ?? '',
+        userType: accountType.toLowerCase(),
+        createdAt: userData['createdAt']?.toDate() ?? DateTime.now(),
+        isActive: userData['isActive'] ?? true,
+        studentId: userData['studentId'],
+        department: userData['department'],
+        year: userData['year'],
+        clubName: userData['clubName'],
+        clubType: userData['clubType'],
       );
-
-      if (result.user != null) {
-        // Get user data from Firestore
-        return await getUserData(result.user!.uid);
-      }
-      return null;
+      
+      // Step 6: Store in main users collection
+      await _firestore.collection('users').doc(authResult.user!.uid).set(user.toFirestore());
+      
+      print('Login successful for ${user.email}');
+      return user;
+      
     } catch (e) {
-      print('Sign in error: $e');
+      print('Login error: $e');
       rethrow;
     }
   }
 
-  // Get user data from Firestore
+  // Get user data
   Future<UserModel?> getUserData(String uid) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
+      final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
         return UserModel.fromFirestore(doc);
       }
@@ -57,98 +127,68 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _auth.signOut();
+      print('User signed out');
     } catch (e) {
       print('Sign out error: $e');
       rethrow;
     }
   }
 
-  // Check if user is approved by university
-  Future<bool> isUserApproved(String email) async {
+  // Reset password
+  Future<void> resetPassword(String email) async {
     try {
-      final doc = await _firestore.collection('approved_users').doc(email).get();
-      return doc.exists;
+      await _auth.sendPasswordResetEmail(email: email);
+      print('Password reset email sent to $email');
     } catch (e) {
-      print('Error checking user approval: $e');
-      return false;
-    }
-  }
-
-  // Admin function: Add approved user (only for university admin)
-  Future<void> addApprovedUser({
-    required String email,
-    required String userType, // 'student' or 'club'
-    required Map<String, dynamic> userData,
-  }) async {
-    try {
-      // Add to approved users collection
-      await _firestore.collection('approved_users').doc(email).set({
-        'email': email,
-        'userType': userType,
-        'approvedAt': FieldValue.serverTimestamp(),
-        'approvedBy': currentUser?.email ?? 'admin',
-        ...userData,
-      });
-
-      print('User $email approved successfully');
-    } catch (e) {
-      print('Error adding approved user: $e');
+      print('Password reset error: $e');
       rethrow;
     }
   }
 
-  // Create user account after approval (called during first login)
-  Future<UserModel?> createUserAccount({
+  // Sign in with Google (placeholder for admin screen)
+  Future<UserModel?> signInWithGoogle() async {
+    try {
+      // This is a placeholder - implement Google sign in if needed
+      throw Exception('Google sign in not implemented yet');
+    } catch (e) {
+      print('Google sign in error: $e');
+      rethrow;
+    }
+  }
+
+  // Add approved user (placeholder for admin panel)
+  Future<void> addApprovedUser({
     required String email,
-    required String password,
     required String userType,
     required Map<String, dynamic> userData,
   }) async {
     try {
-      // Check if user is approved
-      if (!await isUserApproved(email)) {
-        throw Exception('User not approved by university administration');
+      // Add user to the appropriate collection
+      String collection;
+      switch (userType.toLowerCase()) {
+        case 'admin':
+          collection = 'admin_users';
+          break;
+        case 'student':
+          collection = 'student_users';
+          break;
+        case 'club':
+          collection = 'club_users';
+          break;
+        default:
+          throw Exception('Invalid user type');
       }
 
-      // Create Firebase Auth account
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      await _firestore.collection(collection).add({
+        'email': email.toLowerCase(),
+        'userType': userType.toLowerCase(),
+        'createdAt': FieldValue.serverTimestamp(),
+        ...userData,
+      });
 
-      if (result.user != null) {
-        // Create user document in Firestore
-        UserModel newUser = UserModel(
-          uid: result.user!.uid,
-          email: email,
-          userType: userType,
-          createdAt: DateTime.now(),
-          isActive: true,
-          ...userData,
-        );
-
-        await _firestore.collection('users').doc(result.user!.uid).set(newUser.toFirestore());
-        
-        return newUser;
-      }
-      return null;
+      print('User $email added to $collection');
     } catch (e) {
-      print('Error creating user account: $e');
-      rethrow;
-    }
-  }
-
-  // Reset password (for approved users only)
-  Future<void> resetPassword(String email) async {
-    try {
-      // Check if user is approved
-      if (!await isUserApproved(email)) {
-        throw Exception('Email not found in university system');
-      }
-
-      await _auth.sendPasswordResetEmail(email: email);
-    } catch (e) {
-      print('Error resetting password: $e');
+      print('Error adding approved user: $e');
       rethrow;
     }
   }

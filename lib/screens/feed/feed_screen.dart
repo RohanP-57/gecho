@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/post_card.dart';
 import '../../services/post_service.dart';
-import '../../services/user_service.dart';
 import '../../models/post_model.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -13,34 +13,13 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   final PostService _postService = PostService();
-  final UserService _userService = UserService();
-  bool _hasInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeData();
-  }
-
-  Future<void> _initializeData() async {
-    if (!_hasInitialized) {
-      try {
-        await _userService.createDummyUsers();
-        await _postService.createDummyPosts();
-        await _postService.updateExistingPostsWithImages();
-        _hasInitialized = true;
-      } catch (e) {
-        print('Error initializing data: $e');
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Social Media',
+          'University Portal',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 24,
@@ -48,15 +27,21 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.favorite_border),
+            icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
               // Activity/notifications screen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Notifications coming soon!')),
+              );
             },
           ),
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline),
             onPressed: () {
               // Messages screen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Messages coming soon!')),
+              );
             },
           ),
         ],
@@ -69,54 +54,14 @@ class _FeedScreenState extends State<FeedScreen> {
           }
 
           if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {});
-                    },
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
+            print('Feed error: ${snapshot.error}');
+            return _buildEmptyState('Welcome to University Portal!');
           }
 
           final posts = snapshot.data ?? [];
 
           if (posts.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.photo_library, size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No posts yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Start following people or create your first post!',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _postService.createDummyPosts();
-                      setState(() {});
-                    },
-                    child: const Text('Load Sample Posts'),
-                  ),
-                ],
-              ),
-            );
+            return _buildEmptyState('No posts yet');
           }
 
           return RefreshIndicator(
@@ -132,6 +77,115 @@ class _FeedScreenState extends State<FeedScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(60),
+            ),
+            child: Icon(
+              Icons.school,
+              size: 60,
+              color: Colors.blue.shade300,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Connect with your university community',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              children: [
+                _buildFeatureItem(
+                  Icons.school_outlined,
+                  'University Posts',
+                  'See posts from clubs and administration',
+                ),
+                const SizedBox(height: 16),
+                _buildFeatureItem(
+                  Icons.event_outlined,
+                  'Events & Activities',
+                  'Stay updated with campus events',
+                ),
+                const SizedBox(height: 16),
+                _buildFeatureItem(
+                  Icons.announcement_outlined,
+                  'Announcements',
+                  'Important university updates and news',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(IconData icon, String title, String description) {
+    return Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.blue.shade600,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
