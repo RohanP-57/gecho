@@ -425,6 +425,15 @@ class _ApprovalRequestsScreenState extends State<ApprovalRequestsScreen> {
 
           final requests = snapshot.data?.docs ?? [];
           
+          // Sort requests by submittedAt on client side (newest first)
+          requests.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTime = (aData['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+            final bTime = (bData['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+            return bTime.compareTo(aTime); // Descending order (newest first)
+          });
+          
           // Limit to 20 requests max
           final limitedRequests = requests.take(20).toList();
 

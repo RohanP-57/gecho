@@ -236,21 +236,21 @@ class RegistrationService {
     return _firestore
         .collection('registration_requests')
         .where('status', isEqualTo: 'pending')
-        .orderBy('submittedAt', descending: true)
         .snapshots();
   }
 
   // Get all registration requests for admin (with filters)
   Stream<QuerySnapshot> getAllRegistrationRequests({String? status}) {
-    Query query = _firestore
-        .collection('registration_requests')
-        .orderBy('submittedAt', descending: true);
-    
     if (status != null) {
-      query = query.where('status', isEqualTo: status);
+      return _firestore
+          .collection('registration_requests')
+          .where('status', isEqualTo: status)
+          .snapshots();
+    } else {
+      return _firestore
+          .collection('registration_requests')
+          .snapshots();
     }
-    
-    return query.snapshots();
   }
 
   // Clean up expired requests (can be called periodically)
