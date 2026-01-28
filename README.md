@@ -1,79 +1,63 @@
-# 🎓 University Portal - Student & Club Platform
+# 🎓 Gecho - University Portal
 
-A comprehensive Flutter-based social platform designed specifically for university students and clubs, featuring Google Authentication, domain validation, and a web-based admin panel.
+A comprehensive Flutter-based social platform designed specifically for university students and clubs, featuring secure authentication, content sharing, and administrative controls with Firebase backend.
 
 ## 🌟 Features
 
 ### 📱 **Mobile App (Students & Clubs)**
-- 🔐 **Google Authentication** - Secure login with university Google accounts
-- 📸 **Photo Sharing** - Upload and share photos with captions and tags
-- ✍️ **Blog Posts** - Write and publish blog posts with optional cover images
-- 🏠 **Feed** - Browse posts from students and clubs
-- 🔍 **Explore** - Discover content in a grid layout
-- 👤 **Profile** - Student/club profiles with verification badges
-- ❤️ **Interactions** - Like and comment on posts
-- 🏷️ **Tags** - Organize content with hashtags
+- 🔐 **Secure Authentication** - University-controlled login system with admin approval
+- 📸 **Photo Sharing** - Upload and share photos with captions and tags using Cloudinary
+- ✍️ **Blog Posts** - Write and publish text-only blog posts with rich content
+- 🏠 **Feed** - Browse posts from students and clubs with priority post support
+- 🔍 **Explore** - Discover content in an optimized grid layout
+- 👤 **Profile** - User profiles with role-based verification
+- ❤️ **Interactions** - Like and comment on posts with real-time updates
+- 🏷️ **Tags** - Organize content with hashtags and categories
 - 🎯 **Domain Validation** - Students must use @gla.ac.in emails
+- 🔔 **Admin Priority Posts** - Admins can pin important announcements
 
-### 🌐 **Web Admin Panel**
-- 👨‍💼 **Admin Dashboard** - Web-based administration interface
-- ✅ **User Approval** - Approve student and club registrations
-- 📋 **Registration Management** - Review pending access requests
-- 🔍 **User Monitoring** - View approved users and their details
-- 🚀 **Firebase Hosting** - Deployed admin panel for easy access
-
-## Screenshots
-
-*Coming soon...*
+### 🌐 **Admin Panel**
+- 👨‍💼 **Registration Management** - Approve/reject student and club access requests
+- ✅ **User Approval System** - Review pending registrations with detailed information
+- 📋 **Request Monitoring** - Track registration requests with expiry management
+- 🔍 **User Management** - Monitor approved users across different roles
+- 🚀 **Content Moderation** - Manage posts and user-generated content
 
 ## 📁 Project Structure
 
 ```
 lib/
-├── main.dart                    # App entry point with routing
+├── main.dart                    # App entry point with Firebase initialization
 ├── firebase_options.dart        # Firebase configuration
 ├── models/
 │   ├── user_model.dart         # University user data model
-│   ├── post_model.dart         # Post data model
-│   └── comment_model.dart      # Comment data model
+│   └── post_model.dart         # Post data model with priority support
 ├── screens/
 │   ├── auth/
-│   │   ├── login_screen.dart   # Google Auth login
-│   │   ├── register_screen.dart # Registration request
-│   │   └── registration_screen.dart # User registration
+│   │   ├── login_screen.dart   # Multi-role authentication
+│   │   └── registration_screen.dart # User registration requests
 │   ├── admin/
-│   │   ├── admin_login_screen.dart # Web admin login
-│   │   └── admin_panel.dart    # Admin dashboard
+│   │   └── approval_requests_screen.dart # Admin approval interface
 │   ├── home/
-│   │   └── home_screen.dart    # Main navigation
+│   │   └── home_screen.dart    # Main navigation hub
 │   ├── feed/
-│   │   └── feed_screen.dart    # Posts feed
+│   │   └── feed_screen.dart    # Posts feed with priority sorting
 │   ├── explore/
-│   │   └── explore_screen.dart # Explore posts
+│   │   └── explore_screen.dart # Content discovery
 │   ├── create/
-│   │   └── create_post_screen.dart # Create posts
+│   │   └── create_post_screen.dart # Post creation (photo/blog)
 │   └── profile/
 │       └── profile_screen.dart # User profiles
 ├── services/
-│   ├── auth_service.dart       # Google Auth & domain validation
-│   ├── registration_service.dart # Registration management
-│   ├── user_service.dart       # User data management
-│   ├── post_service.dart       # Post data management
-│   ├── comment_service.dart    # Comment management
-│   └── image_service.dart      # Image handling
-├── utils/
-│   └── helpers.dart           # Utility functions
+│   ├── auth_service.dart       # Authentication & role management
+│   ├── registration_service.dart # Registration workflow
+│   ├── post_service.dart       # Post management with Cloudinary
+│   └── image_service.dart      # Cloudinary image handling
 └── widgets/
-    ├── post_card.dart         # Post display widget
-    ├── post_grid_item.dart    # Grid post item
-    └── post_detail_screen.dart # Full post view
+    ├── post_card.dart         # Post display component
+    └── post_grid_item.dart    # Grid layout component
 
-web/
-├── index.html                  # Web app entry point
-└── favicon.png                 # Web app icon
-
-deploy_admin.sh                 # Web deployment script
-firebase.json                   # Firebase hosting config
+firebase.json                   # Firebase project configuration
 firestore.rules                 # Database security rules
 storage.rules                   # Storage security rules
 ```
@@ -81,14 +65,79 @@ storage.rules                   # Storage security rules
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Flutter SDK (3.8+)
+- Flutter SDK (3.7+) - **Updated for compatibility**
+- Dart SDK (3.7.0+)
 - Firebase project with:
   - Firestore Database
   - Firebase Storage
   - Firebase Authentication
-  - Firebase Hosting (for admin panel)
-- Google Cloud Console project for OAuth
-- Node.js & Firebase CLI (for web deployment)
+  - Firebase Hosting (optional)
+- Cloudinary account for image storage
+- Node.js & Firebase CLI (for deployment)
+
+### 📱 Mobile App Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/RohanP-57/gecho.git
+   cd gecho
+   ```
+
+2. **Install dependencies**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Configure Firebase**
+   - Add your `google-services.json` to `android/app/`
+   - Update `lib/firebase_options.dart` with your config
+   - Deploy Firestore security rules:
+     ```bash
+     firebase login
+     firebase use your-project-id
+     firebase deploy --only firestore:rules
+     ```
+
+4. **Configure Environment Variables**
+   Create a `.env` file in the project root:
+   ```env
+   CLOUDINARY_CLOUD_NAME=your_cloud_name
+   CLOUDINARY_API_KEY=your_api_key
+   CLOUDINARY_API_SECRET=your_api_secret
+   ```
+
+5. **Run the mobile app**
+   ```bash
+   flutter run lib/main.dart
+   ```
+
+### 🔧 Troubleshooting
+
+#### Common Issues & Solutions
+
+**1. "Entrypoint isn't within the current project"**
+- Ensure you're running from the project root directory
+- Use relative path: `flutter run lib/main.dart`
+- In IDE configuration, set Dart entrypoint to `lib/main.dart` (not absolute path)
+
+**2. Firestore Index Errors**
+- ✅ **Fixed**: Removed `orderBy` clauses that required indexes
+- Client-side sorting implemented for better performance
+- No manual index creation needed
+
+**3. Permission Denied Errors**
+- ✅ **Fixed**: Updated Firestore security rules
+- All authenticated users can now create posts
+- Proper role-based access control implemented
+
+**4. Flutter Version Compatibility**
+- ✅ **Fixed**: Updated `pubspec.yaml` to use Dart SDK ^3.7.0
+- Compatible with Flutter 3.29.2 and above
+
+**5. Icon Rendering Issues**
+- Run `flutter clean` and `flutter pub get`
+- Restart the app completely
+- Material Design icons are properly configured
 
 ### 📱 Mobile App Setup
 
@@ -158,20 +207,57 @@ STUDENT_EMAIL_DOMAIN=@gla.ac.in
 
 ### 📊 Firestore Collections
 
-The app uses these Firestore collections:
+The app uses role-based collections for better security:
 
-- **users** - University user profiles and metadata
-- **approved_users** - Pre-approved students and clubs
-- **registration_requests** - Pending access requests
-- **posts** - Photo and blog posts
-- **comments** - Post comments
+- **admin_users** - Administrator accounts
+- **student_users** - Student profiles and data  
+- **club_users** - Club profiles and data
+- **registration_requests** - Pending access requests with expiry
+- **posts** - Global posts collection (photos and blogs)
+
+### � Security Rules
+
+Updated Firestore security rules provide:
+- **Role-based access control** - Different permissions for admin/student/club users
+- **Authentication requirements** - All operations require valid authentication
+- **Registration workflow** - Secure approval process for new users
+- **Content permissions** - Proper read/write access for posts and comments
 
 ### 📁 Storage Structure
 
-Firebase Storage is organized as:
-- `posts/` - Photo post images
-- `blog_covers/` - Blog post cover images
-- `profiles/` - User profile pictures
+- **Cloudinary Integration** - All images stored in Cloudinary for optimization
+- **Automatic image processing** - Resizing and format optimization
+- **CDN delivery** - Fast global image delivery
+- **Secure uploads** - Authenticated upload process
+
+## 🆕 Recent Updates & Fixes
+
+### ✅ **Version 2.0 - Major Stability Update**
+
+**🔧 Critical Fixes:**
+- **Firestore Index Issues**: Removed complex queries requiring manual indexes
+- **Permission Errors**: Updated security rules for proper access control
+- **Flutter Compatibility**: Fixed Dart SDK version compatibility (3.8.1 → 3.7.0)
+- **Icon Rendering**: Resolved Material Design icon display issues
+- **Entrypoint Configuration**: Fixed IDE configuration for proper app launching
+
+**🚀 Performance Improvements:**
+- **Client-side Sorting**: Moved data sorting from Firestore to client for better performance
+- **Optimized Queries**: Simplified Firestore queries to avoid index requirements
+- **Image Optimization**: Enhanced Cloudinary integration for faster loading
+- **Memory Management**: Improved app performance and stability
+
+**🔐 Security Enhancements:**
+- **Updated Firestore Rules**: More permissive rules for authenticated users
+- **Role-based Collections**: Separate collections for different user types
+- **Secure File Handling**: Added sensitive files to .gitignore
+- **Authentication Flow**: Improved user authentication and role management
+
+**📱 User Experience:**
+- **Priority Posts**: Admins can pin important announcements
+- **Registration Workflow**: Streamlined approval process with expiry management
+- **Error Handling**: Better error messages and user feedback
+- **UI Improvements**: Enhanced interface for better usability
 
 
 ## 🎯 Features in Detail
@@ -217,148 +303,222 @@ Firebase Storage is organized as:
 ## 📦 Dependencies
 
 ### Core Dependencies
-- `firebase_core` - Firebase initialization
-- `firebase_auth` - Authentication with Google Sign-In
-- `cloud_firestore` - Firestore database
-- `firebase_storage` - File storage
-- `google_sign_in` - Google authentication integration
+- `firebase_core: ^3.15.2` - Firebase initialization
+- `firebase_auth: ^5.7.0` - Authentication system
+- `cloud_firestore: ^5.6.12` - Firestore database
+- `firebase_storage: ^12.4.10` - File storage
 
-### UI & Media
-- `image_picker` - Image selection from gallery/camera
-- `cached_network_image` - Optimized image caching and display
-- `cupertino_icons` - iOS-style icons
+### Image & Media
+- `image_picker: ^1.2.0` - Image selection from gallery/camera
+- `cached_network_image: ^3.4.1` - Optimized image caching
+- `cloudinary_public: ^0.21.0` - Cloudinary integration for image storage
+
+### UI & Navigation
+- `cupertino_icons: ^1.0.8` - iOS-style icons
+- Material Design Icons - Built-in Flutter icons
 
 ### Utilities
-- `intl` - Date formatting and internationalization
-- `uuid` - Unique ID generation for posts and comments
-- `http` - HTTP requests for API calls
-- `crypto` - Cryptographic functions for security
+- `intl: ^0.19.0` - Date formatting and internationalization
+- `uuid: ^4.5.1` - Unique ID generation
+- `http: ^1.5.0` - HTTP requests
+- `crypto: ^3.0.7` - Cryptographic functions
+- `flutter_dotenv: ^5.2.1` - Environment variables
 
 ### Development
-- `flutter_lints` - Code analysis and linting
+- `flutter_lints: ^5.0.0` - Code analysis and linting
 - `flutter_test` - Testing framework
 
 ## 🛠️ Development
 
+### Development Environment
+- **Flutter Version**: 3.29.2 (Channel stable)
+- **Dart Version**: 3.7.0+
+- **Target Platforms**: Android, iOS
+- **IDE Support**: VS Code, Android Studio, IntelliJ IDEA
+
 ### Adding New Features
 
-1. **Models** - Create data models in `lib/models/` for new entities
-2. **Services** - Add business logic in `lib/services/` for data management
-3. **Screens** - Build UI screens in `lib/screens/` following the existing structure
+1. **Models** - Create data models in `lib/models/` following existing patterns
+2. **Services** - Add business logic in `lib/services/` with proper error handling
+3. **Screens** - Build UI screens in `lib/screens/` with responsive design
 4. **Widgets** - Create reusable components in `lib/widgets/`
-5. **Authentication** - Ensure new features respect university domain validation
+5. **Security** - Ensure new features respect role-based access control
 
-### 🧪 Testing
+### 🧪 Testing & Quality Assurance
 
-The app includes comprehensive testing setup:
-- **Unit Tests** - Test business logic and services
-- **Widget Tests** - Test UI components and screens
-- **Integration Tests** - Test complete user flows
-- **Sample Data** - Demo users and content for development
+```bash
+# Run all tests
+flutter test
+
+# Analyze code quality
+flutter analyze
+
+# Check for linting issues
+flutter pub run flutter_lints
+
+# Performance profiling
+flutter run --profile
+```
 
 ### 🔧 Development Workflow
 
-1. **Mobile Development**
+1. **Local Development**
    ```bash
    flutter run --debug
-   flutter test
+   flutter hot-reload  # r key during development
+   flutter hot-restart # R key during development
+   ```
+
+2. **Firebase Emulator (Optional)**
+   ```bash
+   firebase emulators:start --only firestore,auth,storage
+   ```
+
+3. **Code Quality Checks**
+   ```bash
+   flutter clean
+   flutter pub get
    flutter analyze
-   ```
-
-2. **Web Admin Development**
-   ```bash
-   flutter run -d chrome --web-port 8080
-   flutter build web --release
-   ```
-
-3. **Firebase Emulator (Optional)**
-   ```bash
-   firebase emulators:start
+   flutter test
    ```
 
 ## 🚀 Deployment
 
 ### 📱 Mobile App Deployment
 
-1. **Android**
+1. **Android Release**
    ```bash
    flutter build apk --release
    flutter build appbundle --release
    ```
 
-2. **iOS**
+2. **iOS Release**
    ```bash
    flutter build ios --release
    ```
 
-### 🌐 Web Admin Panel Deployment
+### 🔥 Firebase Deployment
 
-1. **Automatic Deployment**
+1. **Deploy Firestore Rules**
    ```bash
-   ./deploy_admin.sh
+   firebase login
+   firebase use your-project-id
+   firebase deploy --only firestore:rules
    ```
 
-2. **Manual Deployment**
+2. **Deploy Storage Rules**
    ```bash
-   flutter build web --release --base-href "/admin/"
-   firebase deploy --only hosting
+   firebase deploy --only storage
    ```
 
-### 🔗 Access URLs
+3. **Full Firebase Deployment**
+   ```bash
+   firebase deploy
+   ```
 
-After deployment:
-- **Mobile App**: Available through app stores or direct APK
-- **Admin Panel**: `https://your-project-id.web.app/admin`
-- **Main Web App**: `https://your-project-id.web.app/`
+## 🔧 Configuration Files
 
-## 🎯 University-Specific Configuration
+### Important Configuration Files
+- `pubspec.yaml` - Flutter dependencies and project configuration
+- `firebase.json` - Firebase project configuration
+- `firestore.rules` - Database security rules (excluded from git)
+- `storage.rules` - Storage security rules (excluded from git)
+- `.env` - Environment variables (excluded from git)
+- `serviceAccountKey.json` - Firebase service account (excluded from git)
 
-### Domain Settings
-- **Student Domain**: `@gla.ac.in` (enforced)
-- **Club Domains**: Any university email (flexible)
-- **Admin Access**: Configurable in `main.dart`
+### Security & Privacy
+The following files are excluded from version control for security:
+- `serviceAccountKey.json`
+- `firestore.rules`
+- `firestore.indexes.json`
+- `storage.rules`
+- `.env` files
+- `google-services.json`
+- `GoogleService-Info.plist`
 
-### Content Guidelines
-- University-appropriate content only
-- Academic and club-focused posts
-- Moderated comment system
-- Tag-based content organization
+## 🎯 University-Specific Features
+
+### Authentication System
+- **Multi-role Support**: Admin, Student, Club user types
+- **Domain Validation**: Students must use @gla.ac.in emails
+- **Approval Workflow**: All users require admin approval
+- **Registration Requests**: Self-service registration with admin review
+
+### Content Management
+- **Priority Posts**: Admins can pin important announcements for 2 days
+- **Role-based Posting**: Different permissions for different user types
+- **Content Moderation**: Admin oversight of user-generated content
+- **Tag System**: Organize content by categories and topics
+
+### Administrative Features
+- **Registration Management**: Review and approve user requests
+- **User Monitoring**: Track approved users and their activity
+- **Content Oversight**: Monitor posts and user interactions
+- **Bulk Operations**: Manage multiple users efficiently
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Follow university coding standards
+3. Follow Flutter/Dart coding standards
 4. Test with university email domains
-5. Submit a pull request with detailed description
+5. Ensure Firebase rules compatibility
+6. Submit a pull request with detailed description
 
 ### Code Standards
-- Follow Flutter/Dart conventions
-- Maintain university domain validation
-- Ensure web admin panel compatibility
-- Test on both mobile and web platforms
+- Follow Flutter/Dart conventions and linting rules
+- Maintain role-based access control
+- Test on both Android and iOS platforms
+- Ensure Firestore security rule compliance
+- Document new features and API changes
+
+### Recent Contributions
+- Fixed Firestore index and permission errors
+- Updated Flutter/Dart compatibility
+- Enhanced security rules and access control
+- Improved error handling and user experience
+- Added comprehensive documentation
 
 ## 📄 License
 
 This project is developed for educational purposes and university use.
 
-## 🆘 Support
+## 🆘 Support & Troubleshooting
 
 ### For Students & Clubs
-- Contact university IT support
 - Submit registration requests through the app
-- Check with student services for account activation
+- Contact university IT support for account issues
+- Check with student services for approval status
 
 ### For Developers
-- Create issues in the repository
+- Check the troubleshooting section above for common issues
+- Create issues in the GitHub repository
 - Follow the contribution guidelines
 - Test with university email domains
 
 ### For Administrators
-- Access the web admin panel at `/admin`
-- Use Google Sign-In with admin credentials
+- Use the admin panel for user management
 - Contact IT support for deployment assistance
+- Review security rules before making changes
+
+### Common Issues & Solutions
+
+1. **App won't start**: Check Flutter/Dart version compatibility
+2. **Login issues**: Verify Firebase authentication configuration
+3. **Permission errors**: Ensure Firestore rules are deployed
+4. **Image upload fails**: Check Cloudinary configuration
+5. **Build errors**: Run `flutter clean` and `flutter pub get`
+
+### Getting Help
+- 📧 **Email**: Contact university IT support
+- 🐛 **Bug Reports**: Create GitHub issues
+- 💡 **Feature Requests**: Submit through GitHub discussions
+- 📚 **Documentation**: Check this README and code comments
 
 ---
 
-**🎓 Built for GLA University - Connecting Students & Clubs**
+**🎓 Gecho - Connecting University Students & Clubs**
+
+*Built with Flutter & Firebase for GLA University*
+
+**Latest Update**: Version 2.0 - Major stability and performance improvements
