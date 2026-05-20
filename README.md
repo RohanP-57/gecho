@@ -1,4 +1,4 @@
-# 🎓 G'echo - University Social Platform (Test)
+# 🎓 G'echo - University Social Platform
 
 A comprehensive Flutter-based social platform designed specifically for university students and clubs, featuring secure authentication, content sharing, interactive engagement, and administrative controls with Firebase backend.
 
